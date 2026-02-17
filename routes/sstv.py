@@ -17,6 +17,7 @@ import app as app_module
 from utils.logging import get_logger
 from utils.sse import format_sse
 from utils.event_pipeline import process_event
+from utils.constants import SSTV_QUEUE_MAX_SIZE
 from utils.sstv import (
     get_sstv_decoder,
     is_sstv_available,
@@ -28,7 +29,7 @@ logger = get_logger('intercept.sstv')
 sstv_bp = Blueprint('sstv', __name__, url_prefix='/sstv')
 
 # Queue for SSE progress streaming
-_sstv_queue: queue.Queue = queue.Queue(maxsize=100)
+_sstv_queue: queue.Queue = queue.Queue(maxsize=SSTV_QUEUE_MAX_SIZE)
 
 # Track which device is being used
 sstv_active_device: int | None = None

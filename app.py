@@ -150,11 +150,6 @@ adsb_process = None
 adsb_queue = queue.Queue(maxsize=QUEUE_MAX_SIZE)
 adsb_lock = threading.Lock()
 
-# Satellite/Iridium
-satellite_process = None
-satellite_queue = queue.Queue(maxsize=QUEUE_MAX_SIZE)
-satellite_lock = threading.Lock()
-
 # ACARS aircraft messaging
 acars_process = None
 acars_queue = queue.Queue(maxsize=QUEUE_MAX_SIZE)
@@ -196,10 +191,6 @@ dmr_lock = threading.Lock()
 # TSCM (Technical Surveillance Countermeasures)
 tscm_queue = queue.Queue(maxsize=QUEUE_MAX_SIZE)
 tscm_lock = threading.Lock()
-
-# SubGHz Transceiver (HackRF)
-subghz_queue = queue.Queue(maxsize=QUEUE_MAX_SIZE)
-subghz_lock = threading.Lock()
 
 # Deauth Attack Detection
 deauth_detector = None

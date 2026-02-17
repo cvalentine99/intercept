@@ -20,6 +20,7 @@ from utils.gps import (
     stop_gps,
     stop_gpsd_daemon,
 )
+from utils.constants import GPS_QUEUE_MAX_SIZE
 from utils.logging import get_logger
 from utils.sse import format_sse
 
@@ -28,7 +29,7 @@ logger = get_logger('intercept.gps')
 gps_bp = Blueprint('gps', __name__, url_prefix='/gps')
 
 # Queue for SSE position updates
-_gps_queue: queue.Queue = queue.Queue(maxsize=100)
+_gps_queue: queue.Queue = queue.Queue(maxsize=GPS_QUEUE_MAX_SIZE)
 
 
 def _position_callback(position: GPSPosition) -> None:

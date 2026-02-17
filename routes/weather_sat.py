@@ -10,6 +10,7 @@ import queue
 
 from flask import Blueprint, jsonify, request, Response, send_file
 
+from utils.constants import WEATHER_SAT_QUEUE_MAX_SIZE
 from utils.logging import get_logger
 from utils.sse import sse_stream
 from utils.validation import validate_device_index, validate_gain, validate_latitude, validate_longitude, validate_elevation
@@ -25,7 +26,7 @@ logger = get_logger('intercept.weather_sat')
 weather_sat_bp = Blueprint('weather_sat', __name__, url_prefix='/weather-sat')
 
 # Queue for SSE progress streaming
-_weather_sat_queue: queue.Queue = queue.Queue(maxsize=100)
+_weather_sat_queue: queue.Queue = queue.Queue(maxsize=WEATHER_SAT_QUEUE_MAX_SIZE)
 
 
 def _progress_callback(progress: CaptureProgress) -> None:

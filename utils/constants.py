@@ -103,6 +103,18 @@ QUEUE_MAX_SIZE = 1000
 # GPS queue size (smaller, more frequent updates)
 GPS_QUEUE_MAX_SIZE = 100
 
+# SSTV queue size (progress updates during decoding)
+SSTV_QUEUE_MAX_SIZE = 100
+
+# Weather satellite queue size (capture progress updates)
+WEATHER_SAT_QUEUE_MAX_SIZE = 100
+
+# Meshtastic queue size (mesh network messages)
+MESHTASTIC_QUEUE_MAX_SIZE = 500
+
+# SubGHz queue size (HackRF SSE events)
+SUBGHZ_QUEUE_MAX_SIZE = 200
+
 
 # =============================================================================
 # DATA PARSING

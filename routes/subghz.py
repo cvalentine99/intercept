@@ -22,6 +22,7 @@ from utils.constants import (
     SUBGHZ_TX_MAX_DURATION,
     SUBGHZ_SAMPLE_RATES,
     SUBGHZ_PRESETS,
+    SUBGHZ_QUEUE_MAX_SIZE,
 )
 
 logger = get_logger('intercept.subghz')
@@ -29,7 +30,7 @@ logger = get_logger('intercept.subghz')
 subghz_bp = Blueprint('subghz', __name__, url_prefix='/subghz')
 
 # SSE queue for streaming events to frontend
-_subghz_queue: queue.Queue = queue.Queue(maxsize=200)
+_subghz_queue: queue.Queue = queue.Queue(maxsize=SUBGHZ_QUEUE_MAX_SIZE)
 
 
 def _event_callback(event: dict) -> None:

@@ -16,6 +16,7 @@ from typing import Generator
 
 from flask import Blueprint, jsonify, request, Response
 
+from utils.constants import MESHTASTIC_QUEUE_MAX_SIZE
 from utils.logging import get_logger
 from utils.sse import format_sse
 from utils.meshtastic import (
@@ -31,7 +32,7 @@ logger = get_logger('intercept.meshtastic')
 meshtastic_bp = Blueprint('meshtastic', __name__, url_prefix='/meshtastic')
 
 # Queue for SSE message streaming
-_mesh_queue: queue.Queue = queue.Queue(maxsize=500)
+_mesh_queue: queue.Queue = queue.Queue(maxsize=MESHTASTIC_QUEUE_MAX_SIZE)
 
 # Store recent messages for history
 _recent_messages: list[dict] = []
