@@ -153,10 +153,13 @@ def stream_dsc_decoder(master_fd: int, decoder_process: subprocess.Popen) -> Non
                                 _store_critical_alert(parsed)
                         else:
                             # Raw output for debugging
-                            app_module.dsc_queue.put({
-                                'type': 'raw',
-                                'text': line
-                            })
+                            try:
+                                app_module.dsc_queue.put({
+                                    'type': 'raw',
+                                    'text': line
+                                }, block=False)
+                            except queue.Full:
+                                pass  # Drop event on overflow to prevent backpressure stall
                 except OSError:
                     break
 
@@ -234,20 +237,26 @@ def monitor_rtl_stderr(process: subprocess.Popen) -> None:
 
                 # Check for device busy error
                 if 'usb_claim_interface' in err_text.lower():
-                    app_module.dsc_queue.put({
-                        'type': 'error',
-                        'error': 'SDR device busy',
-                        'error_type': 'DEVICE_BUSY',
-                        'suggestion': 'Use a different SDR device or stop other SDR processes'
-                    })
+                    try:
+                        app_module.dsc_queue.put({
+                            'type': 'error',
+                            'error': 'SDR device busy',
+                            'error_type': 'DEVICE_BUSY',
+                            'suggestion': 'Use a different SDR device or stop other SDR processes'
+                        }, block=False)
+                    except queue.Full:
+                        pass  # Drop event on overflow to prevent backpressure stall
 
                 # Check for other common errors
                 if 'no supported devices' in err_text.lower():
-                    app_module.dsc_queue.put({
-                        'type': 'error',
-                        'error': 'No SDR device found',
-                        'error_type': 'NO_DEVICE'
-                    })
+                    try:
+                        app_module.dsc_queue.put({
+                            'type': 'error',
+                            'error': 'No SDR device found',
+                            'error_type': 'NO_DEVICE'
+                        }, block=False)
+                    except queue.Full:
+                        pass  # Drop event on overflow to prevent backpressure stall
     except Exception:
         pass
 

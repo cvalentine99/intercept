@@ -45,7 +45,10 @@ def stream_rtlamr_output(process: subprocess.Popen[bytes]) -> None:
                 # rtlamr outputs JSON objects, one per line
                 data = json.loads(line)
                 data['type'] = 'rtlamr'
-                app_module.rtlamr_queue.put(data)
+                try:
+                    app_module.rtlamr_queue.put(data, block=False)
+                except queue.Full:
+                    pass  # Drop event on overflow to prevent backpressure stall
 
                 # Log if enabled
                 if app_module.logging_enabled:
@@ -57,7 +60,10 @@ def stream_rtlamr_output(process: subprocess.Popen[bytes]) -> None:
                         pass
             except json.JSONDecodeError:
                 # Not JSON, send as raw
-                app_module.rtlamr_queue.put({'type': 'raw', 'text': line})
+                try:
+                    app_module.rtlamr_queue.put({'type': 'raw', 'text': line}, block=False)
+                except queue.Full:
+                    pass  # Drop event on overflow to prevent backpressure stall
 
     except Exception as e:
         app_module.rtlamr_queue.put({'type': 'error', 'text': str(e)})
@@ -220,7 +226,10 @@ def start_rtlamr() -> Response:
                     err = line.decode('utf-8', errors='replace').strip()
                     if err:
                         logger.debug(f"[rtlamr] {err}")
-                        app_module.rtlamr_queue.put({'type': 'info', 'text': f'[rtlamr] {err}'})
+                        try:
+                            app_module.rtlamr_queue.put({'type': 'info', 'text': f'[rtlamr] {err}'}, block=False)
+                        except queue.Full:
+                            pass  # Drop event on overflow to prevent backpressure stall
 
             stderr_thread = threading.Thread(target=monitor_stderr)
             stderr_thread.daemon = True

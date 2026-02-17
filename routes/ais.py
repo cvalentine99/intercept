@@ -69,6 +69,9 @@ def find_ais_catcher():
     return None
 
 
+MAX_SOCKET_BUFFER = 1048576  # 1 MB max buffer to prevent OOM
+
+
 def parse_ais_stream(port: int):
     """Parse JSON data from AIS-catcher TCP server."""
     global ais_running, ais_connected, ais_messages_received, ais_last_message_time, _ais_error_logged
@@ -98,6 +101,10 @@ def parse_ais_stream(port: int):
                         logger.warning("AIS connection closed (no data)")
                         break
                     buffer += data
+
+                    if len(buffer) > MAX_SOCKET_BUFFER:
+                        logger.warning("AIS buffer exceeded max size, resetting to prevent OOM")
+                        buffer = ""
 
                     while '\n' in buffer:
                         line, buffer = buffer.split('\n', 1)

@@ -23,6 +23,7 @@ import threading
 import platform
 import subprocess
 
+from contextlib import contextmanager
 from typing import Any
 
 from flask import Flask, render_template, jsonify, send_file, Response, request,redirect, url_for, flash, session
@@ -42,6 +43,7 @@ from utils.constants import (
     QUEUE_MAX_SIZE,
 )
 import logging
+import secrets as _secrets
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 # Track application start time for uptime calculation
@@ -51,7 +53,15 @@ logger = logging.getLogger('intercept.database')
 
 # Create Flask app
 app = Flask(__name__)
-app.secret_key = "signals_intelligence_secret" # Required for flash messages
+_flask_secret = os.environ.get('INTERCEPT_FLASK_SECRET_KEY', '')
+if not _flask_secret:
+    _flask_secret = _secrets.token_hex(32)
+    logging.getLogger('intercept.security').warning(
+        "INTERCEPT_FLASK_SECRET_KEY not set — using random key. "
+        "Sessions will not persist across restarts. "
+        "Set INTERCEPT_FLASK_SECRET_KEY in your environment for production use."
+    )
+app.secret_key = _flask_secret
 
 # Set up rate limiting
 limiter = Limiter(
@@ -290,6 +300,29 @@ def release_sdr_device(device_index: int) -> None:
     """
     with sdr_device_registry_lock:
         sdr_device_registry.pop(device_index, None)
+
+
+@contextmanager
+def sdr_device_context(device_index: int, mode_name: str):
+    """Context manager for SDR device claim/release.
+
+    Guarantees device release even on unhandled exceptions.
+
+    Usage:
+        with sdr_device_context(device_index, 'pager') as error:
+            if error:
+                return jsonify({'error': error}), 409
+            # ... use device ...
+
+    Raises:
+        Does not raise; yields error string or None.
+    """
+    error = claim_sdr_device(device_index, mode_name)
+    try:
+        yield error
+    finally:
+        if error is None:
+            release_sdr_device(device_index)
 
 
 def get_sdr_device_status() -> dict[int, str]:
@@ -675,24 +708,42 @@ def _get_dmr_active() -> bool:
 def health_check() -> Response:
     """Health check endpoint for monitoring."""
     import time
+
+    # Capture process references locally to avoid race conditions where
+    # another thread sets them to None between the `is not None` check
+    # and the `.poll()` call.
+    proc_pager = current_process
+    proc_sensor = sensor_process
+    proc_adsb = adsb_process
+    proc_ais = ais_process
+    proc_acars = acars_process
+    proc_vdl2 = vdl2_process
+    proc_aprs = aprs_process
+    proc_wifi = wifi_process
+    proc_bt = bt_process
+    proc_dsc = dsc_process
+
+    from utils.watchdog import get_watchdog
+
     return jsonify({
         'status': 'healthy',
         'version': VERSION,
         'uptime_seconds': round(time.time() - _app_start_time, 2),
         'processes': {
-            'pager': current_process is not None and (current_process.poll() is None if current_process else False),
-            'sensor': sensor_process is not None and (sensor_process.poll() is None if sensor_process else False),
-            'adsb': adsb_process is not None and (adsb_process.poll() is None if adsb_process else False),
-            'ais': ais_process is not None and (ais_process.poll() is None if ais_process else False),
-            'acars': acars_process is not None and (acars_process.poll() is None if acars_process else False),
-            'vdl2': vdl2_process is not None and (vdl2_process.poll() is None if vdl2_process else False),
-            'aprs': aprs_process is not None and (aprs_process.poll() is None if aprs_process else False),
-            'wifi': wifi_process is not None and (wifi_process.poll() is None if wifi_process else False),
-            'bluetooth': bt_process is not None and (bt_process.poll() is None if bt_process else False),
-            'dsc': dsc_process is not None and (dsc_process.poll() is None if dsc_process else False),
+            'pager': proc_pager is not None and proc_pager.poll() is None,
+            'sensor': proc_sensor is not None and proc_sensor.poll() is None,
+            'adsb': proc_adsb is not None and proc_adsb.poll() is None,
+            'ais': proc_ais is not None and proc_ais.poll() is None,
+            'acars': proc_acars is not None and proc_acars.poll() is None,
+            'vdl2': proc_vdl2 is not None and proc_vdl2.poll() is None,
+            'aprs': proc_aprs is not None and proc_aprs.poll() is None,
+            'wifi': proc_wifi is not None and proc_wifi.poll() is None,
+            'bluetooth': proc_bt is not None and proc_bt.poll() is None,
+            'dsc': proc_dsc is not None and proc_dsc.poll() is None,
             'dmr': _get_dmr_active(),
             'subghz': _get_subghz_active(),
         },
+        'watchdog': get_watchdog().get_status(),
         'data': {
             'aircraft_count': len(adsb_aircraft),
             'vessel_count': len(ais_vessels),
@@ -816,6 +867,8 @@ def main() -> None:
     import argparse
     import config
 
+    config.configure_logging()
+
     parser = argparse.ArgumentParser(
         description='INTERCEPT - Signal Intelligence Platform',
         epilog='Environment variables: INTERCEPT_HOST, INTERCEPT_PORT, INTERCEPT_DEBUG, INTERCEPT_LOG_LEVEL'
@@ -908,6 +961,10 @@ def main() -> None:
 
     # Start automatic cleanup of stale data entries
     cleanup_manager.start()
+
+    # Start process watchdog for automatic restart on unexpected exits
+    from utils.watchdog import get_watchdog
+    get_watchdog().start()
 
     # Register blueprints
     from routes import register_blueprints

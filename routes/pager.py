@@ -192,10 +192,16 @@ def stream_decoder(master_fd: int, process: subprocess.Popen[bytes]) -> None:
                         parsed = parse_multimon_output(line)
                         if parsed:
                             parsed['timestamp'] = datetime.now().strftime('%H:%M:%S')
-                            app_module.output_queue.put({'type': 'message', **parsed})
+                            try:
+                                app_module.output_queue.put({'type': 'message', **parsed}, block=False)
+                            except queue.Full:
+                                pass  # Drop event on overflow to prevent backpressure stall
                             log_message(parsed)
                         else:
-                            app_module.output_queue.put({'type': 'raw', 'text': line})
+                            try:
+                                app_module.output_queue.put({'type': 'raw', 'text': line}, block=False)
+                            except queue.Full:
+                                pass  # Drop event on overflow to prevent backpressure stall
                 except OSError:
                     break
 
@@ -371,7 +377,10 @@ def start_decoding() -> Response:
                     err_text = line.decode('utf-8', errors='replace').strip()
                     if err_text:
                         logger.debug(f"[RTL_FM] {err_text}")
-                        app_module.output_queue.put({'type': 'raw', 'text': f'[rtl_fm] {err_text}'})
+                        try:
+                            app_module.output_queue.put({'type': 'raw', 'text': f'[rtl_fm] {err_text}'}, block=False)
+                        except queue.Full:
+                            pass  # Drop event on overflow to prevent backpressure stall
 
             rtl_stderr_thread = threading.Thread(target=monitor_rtl_stderr)
             rtl_stderr_thread.daemon = True
@@ -379,17 +388,23 @@ def start_decoding() -> Response:
 
             # Create a pseudo-terminal for multimon-ng output
             master_fd, slave_fd = pty.openpty()
+            try:
+                multimon_process = subprocess.Popen(
+                    multimon_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    close_fds=True
+                )
+                register_process(multimon_process)
 
-            multimon_process = subprocess.Popen(
-                multimon_cmd,
-                stdin=subprocess.PIPE,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                close_fds=True
-            )
-            register_process(multimon_process)
-
-            os.close(slave_fd)
+                os.close(slave_fd)
+                slave_fd = -1  # Mark as closed
+            except Exception:
+                if slave_fd >= 0:
+                    os.close(slave_fd)
+                os.close(master_fd)
+                raise
 
             # Spawn audio relay thread between rtl_fm and multimon-ng
             stop_relay = threading.Event()

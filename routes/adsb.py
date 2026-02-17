@@ -319,6 +319,9 @@ def check_dump1090_service():
     return None
 
 
+MAX_SOCKET_BUFFER = 1048576  # 1 MB max buffer to prevent OOM
+
+
 def parse_sbs_stream(service_addr):
     """Parse SBS format data from dump1090 SBS port."""
     global adsb_using_service, adsb_connected, adsb_messages_received, adsb_last_message_time, adsb_bytes_received, adsb_lines_received, _sbs_error_logged
@@ -357,6 +360,10 @@ def parse_sbs_stream(service_addr):
                         break
                     adsb_bytes_received += len(data)
                     buffer += data
+
+                    if len(buffer) > MAX_SOCKET_BUFFER:
+                        logger.warning("SBS buffer exceeded max size, resetting to prevent OOM")
+                        buffer = ""
 
                     while '\n' in buffer:
                         line, buffer = buffer.split('\n', 1)

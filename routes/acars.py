@@ -127,7 +127,10 @@ def stream_acars_output(process: subprocess.Popen, is_text_mode: bool = False) -
                 acars_message_count += 1
                 acars_last_message_time = time.time()
 
-                app_module.acars_queue.put(data)
+                try:
+                    app_module.acars_queue.put(data, block=False)
+                except queue.Full:
+                    pass  # Drop event on overflow to prevent backpressure stall
 
                 # Log if enabled
                 if app_module.logging_enabled:
@@ -315,13 +318,20 @@ def start_acars() -> Response:
         # On macOS, use pty to avoid stdout buffering issues
         if platform.system() == 'Darwin':
             master_fd, slave_fd = pty.openpty()
-            process = subprocess.Popen(
-                cmd,
-                stdout=slave_fd,
-                stderr=subprocess.PIPE,
-                start_new_session=True
-            )
-            os.close(slave_fd)
+            try:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=slave_fd,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True
+                )
+                os.close(slave_fd)
+                slave_fd = -1  # Mark as closed
+            except Exception:
+                if slave_fd >= 0:
+                    os.close(slave_fd)
+                os.close(master_fd)
+                raise
             # Wrap master_fd as a text file for line-buffered reading
             process.stdout = io.open(master_fd, 'r', buffering=1)
             is_text_mode = True

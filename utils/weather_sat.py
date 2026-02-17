@@ -444,17 +444,23 @@ class WeatherSatDecoder:
         # terminal.  C/C++ runtimes disable buffering on TTYs, which lets
         # us see output (including \r progress lines) in real time.
         master_fd, slave_fd = pty.openpty()
+        try:
+            self._process = subprocess.Popen(
+                cmd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                stdin=subprocess.DEVNULL,
+                close_fds=True,
+            )
+            register_process(self._process)
+            os.close(slave_fd)  # parent doesn't need the slave side
+            slave_fd = -1  # Mark as closed
+        except Exception:
+            if slave_fd >= 0:
+                os.close(slave_fd)
+            os.close(master_fd)
+            raise
         self._pty_master_fd = master_fd
-
-        self._process = subprocess.Popen(
-            cmd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            stdin=subprocess.DEVNULL,
-            close_fds=True,
-        )
-        register_process(self._process)
-        os.close(slave_fd)  # parent doesn't need the slave side
 
         # Check for early exit asynchronously (avoid blocking /start for 3s)
         def _check_early_exit():
@@ -544,17 +550,23 @@ class WeatherSatDecoder:
         # Use a pseudo-terminal so SatDump thinks it's writing to a real
         # terminal — same approach as live mode for unbuffered output.
         master_fd, slave_fd = pty.openpty()
+        try:
+            self._process = subprocess.Popen(
+                cmd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                stdin=subprocess.DEVNULL,
+                close_fds=True,
+            )
+            register_process(self._process)
+            os.close(slave_fd)  # parent doesn't need the slave side
+            slave_fd = -1  # Mark as closed
+        except Exception:
+            if slave_fd >= 0:
+                os.close(slave_fd)
+            os.close(master_fd)
+            raise
         self._pty_master_fd = master_fd
-
-        self._process = subprocess.Popen(
-            cmd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            stdin=subprocess.DEVNULL,
-            close_fds=True,
-        )
-        register_process(self._process)
-        os.close(slave_fd)  # parent doesn't need the slave side
 
         # For offline mode, don't check for early exit — file decoding
         # may complete very quickly and exit code 0 is normal success.

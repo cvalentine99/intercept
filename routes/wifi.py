@@ -353,7 +353,10 @@ def stream_airodump_output(process, csv_path):
                         for line in stderr_text.split('\n'):
                             line = line.strip()
                             if line and not line.startswith('CH') and not line.startswith('Elapsed'):
-                                app_module.wifi_queue.put({'type': 'error', 'text': f'airodump-ng: {line}'})
+                                try:
+                                    app_module.wifi_queue.put({'type': 'error', 'text': f'airodump-ng: {line}'}, block=False)
+                                except queue.Full:
+                                    pass  # Drop event on overflow to prevent backpressure stall
             except Exception:
                 pass
 
@@ -366,25 +369,34 @@ def stream_airodump_output(process, csv_path):
 
                     for bssid, net in networks.items():
                         if bssid not in app_module.wifi_networks:
-                            app_module.wifi_queue.put({
-                                'type': 'network',
-                                'action': 'new',
-                                **net
-                            })
+                            try:
+                                app_module.wifi_queue.put({
+                                    'type': 'network',
+                                    'action': 'new',
+                                    **net
+                                }, block=False)
+                            except queue.Full:
+                                pass  # Drop event on overflow to prevent backpressure stall
                         else:
-                            app_module.wifi_queue.put({
-                                'type': 'network',
-                                'action': 'update',
-                                **net
-                            })
+                            try:
+                                app_module.wifi_queue.put({
+                                    'type': 'network',
+                                    'action': 'update',
+                                    **net
+                                }, block=False)
+                            except queue.Full:
+                                pass  # Drop event on overflow to prevent backpressure stall
 
                     for mac, client in clients.items():
                         if mac not in app_module.wifi_clients:
-                            app_module.wifi_queue.put({
-                                'type': 'client',
-                                'action': 'new',
-                                **client
-                            })
+                            try:
+                                app_module.wifi_queue.put({
+                                    'type': 'client',
+                                    'action': 'new',
+                                    **client
+                                }, block=False)
+                            except queue.Full:
+                                pass  # Drop event on overflow to prevent backpressure stall
                         else:
                             # Send update if probes changed or signal changed significantly
                             old_client = app_module.wifi_clients[mac]
@@ -394,18 +406,24 @@ def stream_airodump_output(process, csv_path):
                             new_power = int(client.get('power', -100) or -100)
 
                             if new_probes != old_probes or abs(new_power - old_power) >= 5:
-                                app_module.wifi_queue.put({
-                                    'type': 'client',
-                                    'action': 'update',
-                                    **client
-                                })
+                                try:
+                                    app_module.wifi_queue.put({
+                                        'type': 'client',
+                                        'action': 'update',
+                                        **client
+                                    }, block=False)
+                                except queue.Full:
+                                    pass  # Drop event on overflow to prevent backpressure stall
 
                     app_module.wifi_networks = networks
                     app_module.wifi_clients = clients
                     last_parse = current_time
 
                 if current_time - start_time > 5 and not csv_found:
-                    app_module.wifi_queue.put({'type': 'error', 'text': 'No scan data after 5 seconds. Check if monitor mode is properly enabled.'})
+                    try:
+                        app_module.wifi_queue.put({'type': 'error', 'text': 'No scan data after 5 seconds. Check if monitor mode is properly enabled.'}, block=False)
+                    except queue.Full:
+                        pass  # Drop event on overflow to prevent backpressure stall
                     start_time = current_time + 30
 
             time.sleep(0.5)
@@ -415,13 +433,19 @@ def stream_airodump_output(process, csv_path):
             if remaining_stderr:
                 stderr_text = remaining_stderr.decode('utf-8', errors='replace').strip()
                 if stderr_text:
-                    app_module.wifi_queue.put({'type': 'error', 'text': f'airodump-ng exited: {stderr_text}'})
+                    try:
+                        app_module.wifi_queue.put({'type': 'error', 'text': f'airodump-ng exited: {stderr_text}'}, block=False)
+                    except queue.Full:
+                        pass  # Drop event on overflow to prevent backpressure stall
         except Exception:
             pass
 
         exit_code = process.returncode
         if exit_code != 0 and exit_code is not None:
-            app_module.wifi_queue.put({'type': 'error', 'text': f'airodump-ng exited with code {exit_code}'})
+            try:
+                app_module.wifi_queue.put({'type': 'error', 'text': f'airodump-ng exited with code {exit_code}'}, block=False)
+            except queue.Full:
+                pass  # Drop event on overflow to prevent backpressure stall
 
     except Exception as e:
         app_module.wifi_queue.put({'type': 'error', 'text': str(e)})

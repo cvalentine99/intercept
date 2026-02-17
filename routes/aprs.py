@@ -1343,7 +1343,10 @@ def stream_aprs_output(rtl_process: subprocess.Popen, decoder_process: subproces
                         'level': audio_level,
                         'ts': datetime.utcnow().isoformat() + 'Z'
                     }
-                    app_module.aprs_queue.put(meter_msg)
+                    try:
+                        app_module.aprs_queue.put(meter_msg, block=False)
+                    except queue.Full:
+                        pass  # Drop event on overflow to prevent backpressure stall
                 continue  # Audio level lines are not packets
 
             # multimon-ng prefixes decoded packets with "AFSK1200: "
@@ -1386,7 +1389,10 @@ def stream_aprs_output(rtl_process: subprocess.Popen, decoder_process: subproces
                         )
                         del aprs_stations[oldest]
 
-                app_module.aprs_queue.put(packet)
+                try:
+                    app_module.aprs_queue.put(packet, block=False)
+                except queue.Full:
+                    pass  # Drop event on overflow to prevent backpressure stall
 
                 # Log if enabled
                 if app_module.logging_enabled:

@@ -298,6 +298,12 @@ ALERT_WEBHOOK_TIMEOUT = _get_env_int('ALERT_WEBHOOK_TIMEOUT', 5)
 ADMIN_USERNAME = _get_env('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = _get_env('ADMIN_PASSWORD', 'admin')
 
+if ADMIN_PASSWORD == 'admin':
+    logging.getLogger('intercept.security').warning(
+        "INTERCEPT_ADMIN_PASSWORD is set to the default 'admin'. "
+        "Change it via INTERCEPT_ADMIN_PASSWORD environment variable for production use."
+    )
+
 
 def configure_logging() -> None:
     """Configure application logging."""

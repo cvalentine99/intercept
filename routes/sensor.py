@@ -43,7 +43,10 @@ def stream_sensor_output(process: subprocess.Popen[bytes]) -> None:
                 # rtl_433 outputs JSON objects, one per line
                 data = json.loads(line)
                 data['type'] = 'sensor'
-                app_module.sensor_queue.put(data)
+                try:
+                    app_module.sensor_queue.put(data, block=False)
+                except queue.Full:
+                    pass  # Drop event on overflow to prevent backpressure stall
 
                 # Push scope event when signal level data is present
                 rssi = data.get('rssi')
@@ -70,7 +73,10 @@ def stream_sensor_output(process: subprocess.Popen[bytes]) -> None:
                         pass
             except json.JSONDecodeError:
                 # Not JSON, send as raw
-                app_module.sensor_queue.put({'type': 'raw', 'text': line})
+                try:
+                    app_module.sensor_queue.put({'type': 'raw', 'text': line}, block=False)
+                except queue.Full:
+                    pass  # Drop event on overflow to prevent backpressure stall
 
     except Exception as e:
         app_module.sensor_queue.put({'type': 'error', 'text': str(e)})
@@ -210,7 +216,10 @@ def start_sensor() -> Response:
                     err = line.decode('utf-8', errors='replace').strip()
                     if err and not any(noise in err for noise in _stderr_noise):
                         logger.debug(f"[rtl_433] {err}")
-                        app_module.sensor_queue.put({'type': 'info', 'text': f'[rtl_433] {err}'})
+                        try:
+                            app_module.sensor_queue.put({'type': 'info', 'text': f'[rtl_433] {err}'}, block=False)
+                        except queue.Full:
+                            pass  # Drop event on overflow to prevent backpressure stall
 
             stderr_thread = threading.Thread(target=monitor_stderr)
             stderr_thread.daemon = True

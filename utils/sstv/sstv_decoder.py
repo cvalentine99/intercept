@@ -773,6 +773,15 @@ class SSTVDecoder:
         import wave
 
         audio_path = Path(audio_path)
+
+        # Path traversal protection: only allow files under data/ or instance/
+        project_root = Path(__file__).resolve().parent.parent.parent
+        allowed_base = project_root / 'data'
+        instance_base = project_root / 'instance'
+        resolved = audio_path.resolve()
+        if not (resolved.is_relative_to(allowed_base) or resolved.is_relative_to(instance_base)):
+            raise ValueError(f"Path traversal blocked: {audio_path} is outside allowed directories")
+
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 

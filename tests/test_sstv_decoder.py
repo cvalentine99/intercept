@@ -618,11 +618,20 @@ class TestSSTVDecoder:
         images = decoder.get_images()
         assert images == []
 
-    def test_decode_file_not_found(self):
-        """Should raise FileNotFoundError for missing file."""
+    def test_decode_file_path_traversal_blocked(self):
+        """Should raise ValueError for paths outside allowed directories."""
         decoder = SSTVDecoder(output_dir=tempfile.mkdtemp())
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(ValueError, match="Path traversal blocked"):
             decoder.decode_file('/nonexistent/audio.wav')
+
+    def test_decode_file_not_found(self):
+        """Should raise FileNotFoundError for missing file in allowed dir."""
+        decoder = SSTVDecoder(output_dir=tempfile.mkdtemp())
+        # Use a path under instance/ (allowed) but that doesn't exist
+        instance_dir = Path(__file__).resolve().parent.parent / 'instance'
+        missing_file = instance_dir / 'nonexistent_audio.wav'
+        with pytest.raises(FileNotFoundError):
+            decoder.decode_file(str(missing_file))
 
     def test_decode_file_with_synthetic_wav(self):
         """Should process a WAV file through the decode pipeline."""
